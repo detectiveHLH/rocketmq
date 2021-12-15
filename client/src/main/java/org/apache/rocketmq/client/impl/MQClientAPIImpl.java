@@ -1010,6 +1010,16 @@ public class MQClientAPIImpl {
         this.remotingClient.invokeOneway(MixAll.brokerVIPChannel(this.clientConfig.isVipChannelEnabled(), addr), request, timeoutMillis);
     }
 
+    /**
+     * 调用核心逻辑, 发送心跳
+     * @param addr Broker 的地址
+     * @param heartbeatData 心跳的所带的数据
+     * @param timeoutMillis 超时时间
+     * @return
+     * @throws RemotingException
+     * @throws MQBrokerException
+     * @throws InterruptedException
+     */
     public int sendHearbeat(
         final String addr,
         final HeartbeatData heartbeatData,

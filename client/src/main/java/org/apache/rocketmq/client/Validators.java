@@ -51,14 +51,17 @@ public class Validators {
      * Validate group
      */
     public static void checkGroup(String group) throws MQClientException {
+        // 消费组的名称是否是空字符串
         if (UtilAll.isBlank(group)) {
             throw new MQClientException("the specified group is blank", null);
         }
 
+        // 消费组的名称是否超过了长度的限制, 这里是 255
         if (group.length() > CHARACTER_MAX_LENGTH) {
             throw new MQClientException("the specified group is longer than group max length 255.", null);
         }
 
+        // 判断消费组名称中是否包含有非法字符
         if (!regularExpressionMatcher(group, PATTERN)) {
             throw new MQClientException(String.format(
                 "the specified group[%s] contains illegal characters, allowing only %s", group,

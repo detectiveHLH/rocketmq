@@ -143,6 +143,7 @@ public class PushConsumerImpl implements PushConsumer {
 
     @Override
     public synchronized void startup() {
+        // Push Consumer 启动入口
         if (!started) {
             try {
                 this.rocketmqPushConsumer.start();

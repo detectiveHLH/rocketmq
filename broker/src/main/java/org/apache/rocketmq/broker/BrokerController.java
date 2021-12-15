@@ -116,8 +116,12 @@ public class BrokerController {
     private final NettyClientConfig nettyClientConfig;
     private final MessageStoreConfig messageStoreConfig;
     private final ConsumerOffsetManager consumerOffsetManager;
+
+    // 统一对 consumer 进行管理
     private final ConsumerManager consumerManager;
     private final ConsumerFilterManager consumerFilterManager;
+
+    // 统一对 producer 进行管理
     private final ProducerManager producerManager;
     private final ClientHousekeepingService clientHousekeepingService;
     private final PullMessageProcessor pullMessageProcessor;
@@ -943,6 +947,7 @@ public class BrokerController {
             topicConfigWrapper.setTopicConfigTable(topicConfigTable);
         }
 
+        // 如果需要注册则立即执行注册操作
         if (forceRegister || needRegister(this.brokerConfig.getBrokerClusterName(),
             this.getBrokerAddr(),
             this.brokerConfig.getBrokerName(),
@@ -991,6 +996,7 @@ public class BrokerController {
         TopicConfigSerializeWrapper topicConfigWrapper = this.getTopicConfigManager().buildTopicConfigSerializeWrapper();
         List<Boolean> changeList = brokerOuterAPI.needRegister(clusterName, brokerAddr, brokerName, brokerId, topicConfigWrapper, timeoutMills);
         boolean needRegister = false;
+        // 如果结果中有任何一个节点数据不一致, 就需要重新注册
         for (Boolean changed : changeList) {
             if (changed) {
                 needRegister = true;

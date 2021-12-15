@@ -72,9 +72,17 @@ public class ClientManageProcessor extends AsyncNettyRequestProcessor implements
         return false;
     }
 
+    /**
+     * 接收来自消费者的心跳请求
+     * @param ctx
+     * @param request
+     * @return
+     */
     public RemotingCommand heartBeat(ChannelHandlerContext ctx, RemotingCommand request) {
         RemotingCommand response = RemotingCommand.createResponseCommand(null);
         HeartbeatData heartbeatData = HeartbeatData.decode(request.getBody(), HeartbeatData.class);
+
+        // 构建和消费者客户端的信道实例
         ClientChannelInfo clientChannelInfo = new ClientChannelInfo(
             ctx.channel(),
             heartbeatData.getClientID(),
@@ -82,6 +90,7 @@ public class ClientManageProcessor extends AsyncNettyRequestProcessor implements
             request.getVersion()
         );
 
+        // 这里有 for 循环的原因是, 一个消费者可以消费多个 Topic 的消息
         for (ConsumerData data : heartbeatData.getConsumerDataSet()) {
             SubscriptionGroupConfig subscriptionGroupConfig =
                 this.brokerController.getSubscriptionGroupManager().findSubscriptionGroupConfig(
@@ -100,6 +109,7 @@ public class ClientManageProcessor extends AsyncNettyRequestProcessor implements
                     PermName.PERM_WRITE | PermName.PERM_READ, topicSysFlag);
             }
 
+            // 调用执行注册 consumer 的核心逻辑
             boolean changed = this.brokerController.getConsumerManager().registerConsumer(
                 data.getGroupName(),
                 clientChannelInfo,
@@ -110,6 +120,7 @@ public class ClientManageProcessor extends AsyncNettyRequestProcessor implements
                 isNotifyConsumerIdsChangedEnable
             );
 
+            // 更新subscription 或者 更新channel 只要有一个是 true, changed 就为 true
             if (changed) {
                 log.info("registerConsumer info changed {} {}",
                     data.toString(),

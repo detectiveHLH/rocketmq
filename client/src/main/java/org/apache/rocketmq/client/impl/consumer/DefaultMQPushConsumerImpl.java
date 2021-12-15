@@ -571,15 +571,23 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         }
     }
 
+    /**
+     * 开始执行 defaultMQPushConsumerImpl, 启动 Consumer
+     * @throws MQClientException
+     */
     public synchronized void start() throws MQClientException {
         switch (this.serviceState) {
             case CREATE_JUST:
+                // 一般来说, 服务刚刚启动就会走到这个 case 里, 首先打印一些关键日志
                 log.info("the consumer [{}] start beginning. messageModel={}, isUnitMode={}", this.defaultMQPushConsumer.getConsumerGroup(),
                     this.defaultMQPushConsumer.getMessageModel(), this.defaultMQPushConsumer.isUnitMode());
+                // 先给个默认的值, 即——启动默认是失败的
                 this.serviceState = ServiceState.START_FAILED;
 
+                // 对 consumerGroup 名称以及各种参数进行检查
                 this.checkConfig();
 
+                // copy 一份 subscription 数据到 rebalanceImpl 中去, 为什么要做这个操作？当然是后面需要用到
                 this.copySubscription();
 
                 if (this.defaultMQPushConsumer.getMessageModel() == MessageModel.CLUSTERING) {
@@ -615,6 +623,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 }
                 this.offsetStore.load();
 
+                // 判断消费的模式, 是顺序消费还是并发消费
                 if (this.getMessageListenerInner() instanceof MessageListenerOrderly) {
                     this.consumeOrderly = true;
                     this.consumeMessageService =
@@ -625,8 +634,12 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                         new ConsumeMessageConcurrentlyService(this, (MessageListenerConcurrently) this.getMessageListenerInner());
                 }
 
+                // 根据对应的消费模式, 启动对应的不同的实现
+                // Concurrently -> ConsumeMessageConcurrentlyService
+                // Orderly -> ConsumeMessageOrderlyService
                 this.consumeMessageService.start();
 
+                // 将该消费者组丢到内存中维护起来
                 boolean registerOK = mQClientFactory.registerConsumer(this.defaultMQPushConsumer.getConsumerGroup(), this);
                 if (!registerOK) {
                     this.serviceState = ServiceState.CREATE_JUST;
@@ -658,8 +671,10 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
     }
 
     private void checkConfig() throws MQClientException {
+        // 对消费组的名称做一个很常规的校验
         Validators.checkGroup(this.defaultMQPushConsumer.getConsumerGroup());
 
+        // 这里有点疑惑, Validators 已经做了校验, 这里为什么还要再判断一次?
         if (null == this.defaultMQPushConsumer.getConsumerGroup()) {
             throw new MQClientException(
                 "consumerGroup is null"
@@ -667,6 +682,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 null);
         }
 
+        // 消费者组的名字不能等于默认的名称, 即 DEFAULT_CONSUMER, 可以理解为一个 RocketMQ 的保留名称
         if (this.defaultMQPushConsumer.getConsumerGroup().equals(MixAll.DEFAULT_CONSUMER_GROUP)) {
             throw new MQClientException(
                 "consumerGroup can not equal "
@@ -676,6 +692,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 null);
         }
 
+        // 很简单, MessageModel 就是顺序消费或者集群消费, 这个是一定要传的
         if (null == this.defaultMQPushConsumer.getMessageModel()) {
             throw new MQClientException(
                 "messageModel is null"
@@ -683,6 +700,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 null);
         }
 
+        // consumerFromWhere 即从哪里开始消费
         if (null == this.defaultMQPushConsumer.getConsumeFromWhere()) {
             throw new MQClientException(
                 "consumeFromWhere is null"
@@ -698,7 +716,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                     + " " + FAQUrl.suggestTodo(FAQUrl.CLIENT_PARAMETER_CHECK_URL), null);
         }
 
-        // allocateMessageQueueStrategy
+        // allocateMessageQueueStrategy, 在进行 rebalanced 时的 MessageQueue 分配策略
         if (null == this.defaultMQPushConsumer.getAllocateMessageQueueStrategy()) {
             throw new MQClientException(
                 "allocateMessageQueueStrategy is null"
@@ -706,7 +724,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 null);
         }
 
-        // subscription
+        // subscription, 当前消费者实例的相关订阅信息
         if (null == this.defaultMQPushConsumer.getSubscription()) {
             throw new MQClientException(
                 "subscription is null"
@@ -722,6 +740,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 null);
         }
 
+        // 判断当前是顺序消费还是并发消费, 类型只能是这两种, 不是则需要报错
         boolean orderly = this.defaultMQPushConsumer.getMessageListener() instanceof MessageListenerOrderly;
         boolean concurrently = this.defaultMQPushConsumer.getMessageListener() instanceof MessageListenerConcurrently;
         if (!orderly && !concurrently) {
@@ -731,7 +750,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 null);
         }
 
-        // consumeThreadMin
+        // consumeThreadMin 检查消费者组最小的线程数量, 默认为 20, 其区间只能在 (1,1000), 左开右开
         if (this.defaultMQPushConsumer.getConsumeThreadMin() < 1
             || this.defaultMQPushConsumer.getConsumeThreadMin() > 1000) {
             throw new MQClientException(
@@ -740,7 +759,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 null);
         }
 
-        // consumeThreadMax
+        // consumeThreadMax, 同上, 检查消费者最大的消费线程数量, 默认为 20, 区间也在 (1, 1000), 左开右开
         if (this.defaultMQPushConsumer.getConsumeThreadMax() < 1 || this.defaultMQPushConsumer.getConsumeThreadMax() > 1000) {
             throw new MQClientException(
                 "consumeThreadMax Out of range [1, 1000]"
@@ -748,7 +767,8 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 null);
         }
 
-        // consumeThreadMin can't be larger than consumeThreadMax
+        // consumeThreadMin can't be larger than consumeThreadMax, 这代码写的...就不能搞个统一的判断这两个的方法?
+        // 就是判断最小的消费者线程不能大于最大的消费者线程...
         if (this.defaultMQPushConsumer.getConsumeThreadMin() > this.defaultMQPushConsumer.getConsumeThreadMax()) {
             throw new MQClientException(
                 "consumeThreadMin (" + this.defaultMQPushConsumer.getConsumeThreadMin() + ") "
@@ -756,7 +776,8 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 null);
         }
 
-        // consumeConcurrentlyMaxSpan
+        // consumeConcurrentlyMaxSpan 默认值为 2000, 如果本地的缓存的消息
+        // 数量都过了这个值, 那么就会触发流控, 不会在继续从 Broker 拉取消息了
         if (this.defaultMQPushConsumer.getConsumeConcurrentlyMaxSpan() < 1
             || this.defaultMQPushConsumer.getConsumeConcurrentlyMaxSpan() > 65535) {
             throw new MQClientException(
@@ -882,6 +903,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
             SubscriptionData subscriptionData = FilterAPI.buildSubscriptionData(topic, subExpression);
             this.rebalanceImpl.getSubscriptionInner().put(topic, subscriptionData);
             if (this.mQClientFactory != null) {
+                // consumer 也需要向所有的 Broker 发送心跳
                 this.mQClientFactory.sendHeartbeatToAllBrokerWithLock();
             }
         } catch (Exception e) {

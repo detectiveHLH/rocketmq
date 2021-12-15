@@ -95,14 +95,32 @@ public class ConsumerManager {
         }
     }
 
+    /**
+     * 在 broker 上注册 consumer
+     * @param group
+     * @param clientChannelInfo
+     * @param consumeType
+     * @param messageModel
+     * @param consumeFromWhere
+     * @param subList
+     * @param isNotifyConsumerIdsChangedEnable
+     * @return
+     */
     public boolean registerConsumer(final String group, final ClientChannelInfo clientChannelInfo,
         ConsumeType consumeType, MessageModel messageModel, ConsumeFromWhere consumeFromWhere,
         final Set<SubscriptionData> subList, boolean isNotifyConsumerIdsChangedEnable) {
 
+        // 这里的 group 是指我们配置的 consumerGroup 的名称, 这里首先会从
+        // Broker 内存维护的 consumerTable 中尝试获取一下, 没有就设置进去
         ConsumerGroupInfo consumerGroupInfo = this.consumerTable.get(group);
         if (null == consumerGroupInfo) {
+            // 构建 consumerGroupInfo 实例
             ConsumerGroupInfo tmp = new ConsumerGroupInfo(group, consumeType, messageModel, consumeFromWhere);
+
             ConsumerGroupInfo prev = this.consumerTable.putIfAbsent(group, tmp);
+            // putIfAbsent 会返回上次的值, 如果是首次设置那么 consumerGroupInfo 就等于上面刚刚构建好实例
+            // 然后这里 prev 不为 null, 只能说明有其他的线程在执行 putIfAbsent 之前已经注册了, 如果有其他的
+            // 线程已经将 consumerGroup 写入了, 就使用其他线程的值, 因为它更新, 这是个并发的问题, 这一行隐藏了很多的信息
             consumerGroupInfo = prev != null ? prev : tmp;
         }
 

@@ -86,8 +86,11 @@ public class ConsumeMessageOrderlyService implements ConsumeMessageService {
         this.scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryImpl("ConsumeMessageScheduledThread_"));
     }
 
+    @Override
     public void start() {
+        // 当且仅当 messageModel 为 CLUSTERING 时才允许使用 顺序消费, 因为广播模式下是无法保证顺序消费的
         if (MessageModel.CLUSTERING.equals(ConsumeMessageOrderlyService.this.defaultMQPushConsumerImpl.messageModel())) {
+            // 定期对 MessageQueue 加锁, 来保证顺序消费
             this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
                 @Override
                 public void run() {
@@ -206,6 +209,7 @@ public class ConsumeMessageOrderlyService implements ConsumeMessageService {
     }
 
     public synchronized void lockMQPeriodically() {
+        // 这个代表消费者是否已经停止消费了
         if (!this.stopped) {
             this.defaultMQPushConsumerImpl.getRebalanceImpl().lockAll();
         }
